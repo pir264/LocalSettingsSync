@@ -3,7 +3,7 @@ using LocalSettingsSync.Models;
 
 namespace LocalSettingsSync.Services;
 
-public enum ConflictResolution { Overwrite, Skip, Cancel }
+public enum ConflictResolution { Overwrite, OverwriteAll, Skip, SkipAll, Cancel }
 
 public interface IFileCopier
 {
@@ -29,17 +29,30 @@ public class FileCopier : IFileCopier
     public (int copied, bool cancelled) CopyToSource(IReadOnlyList<FileMatch> files, string sourceFolder, Func<FileMatch, string, ConflictResolution> onConflict)
     {
         int count = 0;
+        ConflictResolution? blanket = null;
+
         foreach (var file in files)
         {
             var destination = Path.Combine(sourceFolder, file.RelativePath);
 
             if (File.Exists(destination))
             {
-                var resolution = onConflict(file, destination);
-                if (resolution == ConflictResolution.Cancel)
-                    return (count, true);
-                if (resolution == ConflictResolution.Skip)
-                    continue;
+                var resolution = blanket ?? onConflict(file, destination);
+
+                switch (resolution)
+                {
+                    case ConflictResolution.Cancel:
+                        return (count, true);
+                    case ConflictResolution.Skip:
+                        continue;
+                    case ConflictResolution.SkipAll:
+                        blanket = ConflictResolution.SkipAll;
+                        continue;
+                    case ConflictResolution.OverwriteAll:
+                        blanket = ConflictResolution.OverwriteAll;
+                        break;
+                    // ConflictResolution.Overwrite: fall through to copy
+                }
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);

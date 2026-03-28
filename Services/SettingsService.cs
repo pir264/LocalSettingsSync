@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LocalSettingsSync.Models;
 
 namespace LocalSettingsSync.Services;
@@ -29,6 +30,33 @@ public class SettingsService : ISettingsService
         try
         {
             var json = File.ReadAllText(_settingsPath);
+            var node = JsonNode.Parse(json);
+
+            // Migrate old format: had SourceFolder/TargetFolder/FilterPatterns at root
+            if (node?["Profiles"] == null)
+            {
+                var oldSource = node?["SourceFolder"]?.GetValue<string>() ?? string.Empty;
+                var oldTarget = node?["TargetFolder"]?.GetValue<string>() ?? string.Empty;
+                var oldPatterns = node?["FilterPatterns"]?.AsArray()
+                    .Select(p => p?.GetValue<string>() ?? string.Empty)
+                    .ToList() ?? new List<string>();
+
+                return new AppSettings
+                {
+                    ActiveProfileName = "Default",
+                    Profiles = new List<Profile>
+                    {
+                        new Profile
+                        {
+                            Name = "Default",
+                            SourceFolder = oldSource,
+                            TargetFolder = oldTarget,
+                            FilterPatterns = oldPatterns
+                        }
+                    }
+                };
+            }
+
             return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
         }
         catch

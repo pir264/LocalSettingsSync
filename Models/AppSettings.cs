@@ -2,7 +2,6 @@ namespace LocalSettingsSync.Models;
 
 public class AppSettings
 {
-    public string SourceFolder { get; set; } = string.Empty;
-    public string TargetFolder { get; set; } = string.Empty;
-    public List<string> FilterPatterns { get; set; } = new();
+    public List<Profile> Profiles { get; set; } = new() { new Profile() };
+    public string ActiveProfileName { get; set; } = "Default";
 }

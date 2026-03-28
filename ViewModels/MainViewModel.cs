@@ -15,11 +15,13 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly IFileScanner _fileScanner;
     private readonly IFileCopier _fileCopier;
 
+    private Profile? _activeProfile;
     private string _sourceFolder = string.Empty;
     private string _targetFolder = string.Empty;
     private string _filterPatternsText = string.Empty;
     private bool _isBusy;
     private string _statusMessage = "Ready.";
+    private bool _loadingProfile;
 
     public MainViewModel(ISettingsService settingsService, IFileScanner fileScanner, IFileCopier fileCopier)
     {
@@ -32,11 +34,40 @@ public class MainViewModel : INotifyPropertyChanged
         ScanCommand = new RelayCommand(Scan, CanScan);
         BackupCommand = new RelayCommand(Backup, CanBackup);
         RestoreCommand = new RelayCommand(Restore, CanRestore);
+        NewProfileCommand = new RelayCommand(NewProfile);
+        RenameProfileCommand = new RelayCommand(RenameProfile, () => _activeProfile != null);
+        DeleteProfileCommand = new RelayCommand(DeleteProfile, () => Profiles.Count > 1);
 
         var settings = _settingsService.Load();
-        _sourceFolder = settings.SourceFolder;
-        _targetFolder = settings.TargetFolder;
-        _filterPatternsText = string.Join(Environment.NewLine, settings.FilterPatterns);
+        foreach (var profile in settings.Profiles)
+            Profiles.Add(profile);
+
+        var active = Profiles.FirstOrDefault(p => p.Name == settings.ActiveProfileName)
+                     ?? Profiles.First();
+
+        _loadingProfile = true;
+        _activeProfile = active;
+        _sourceFolder = active.SourceFolder;
+        _targetFolder = active.TargetFolder;
+        _filterPatternsText = string.Join(Environment.NewLine, active.FilterPatterns);
+        _loadingProfile = false;
+    }
+
+    public ObservableCollection<Profile> Profiles { get; } = new();
+
+    public Profile? ActiveProfile
+    {
+        get => _activeProfile;
+        set
+        {
+            if (_activeProfile == value) return;
+            _activeProfile = value;
+            OnPropertyChanged();
+            LoadProfileIntoFields();
+            SaveSettings();
+            RenameProfileCommand.RaiseCanExecuteChanged();
+            DeleteProfileCommand.RaiseCanExecuteChanged();
+        }
     }
 
     public string SourceFolder
@@ -103,6 +134,80 @@ public class MainViewModel : INotifyPropertyChanged
     public RelayCommand ScanCommand { get; }
     public RelayCommand BackupCommand { get; }
     public RelayCommand RestoreCommand { get; }
+    public RelayCommand NewProfileCommand { get; }
+    public RelayCommand RenameProfileCommand { get; }
+    public RelayCommand DeleteProfileCommand { get; }
+
+    private void LoadProfileIntoFields()
+    {
+        _loadingProfile = true;
+        try
+        {
+            _sourceFolder = _activeProfile?.SourceFolder ?? string.Empty;
+            _targetFolder = _activeProfile?.TargetFolder ?? string.Empty;
+            _filterPatternsText = string.Join(Environment.NewLine, _activeProfile?.FilterPatterns ?? []);
+            OnPropertyChanged(nameof(SourceFolder));
+            OnPropertyChanged(nameof(TargetFolder));
+            OnPropertyChanged(nameof(FilterPatternsText));
+            PreviewFiles.Clear();
+            StatusMessage = $"Profile '{_activeProfile?.Name}' loaded.";
+        }
+        finally
+        {
+            _loadingProfile = false;
+        }
+        RaiseCommandsCanExecuteChanged();
+    }
+
+    private void NewProfile()
+    {
+        var existingNames = Profiles.Select(p => p.Name).ToList();
+        var dialog = new ProfileNameDialog(null, existingNames)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        dialog.ShowDialog();
+        if (dialog.Result == null) return;
+
+        var profile = new Profile { Name = dialog.Result };
+        Profiles.Add(profile);
+        ActiveProfile = profile;
+        DeleteProfileCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RenameProfile()
+    {
+        if (_activeProfile == null) return;
+
+        var existingNames = Profiles
+            .Where(p => p != _activeProfile)
+            .Select(p => p.Name)
+            .ToList();
+
+        var dialog = new ProfileNameDialog(_activeProfile.Name, existingNames)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        dialog.ShowDialog();
+        if (dialog.Result == null) return;
+
+        _activeProfile.Name = dialog.Result;
+        SaveSettings();
+    }
+
+    private void DeleteProfile()
+    {
+        if (_activeProfile == null || Profiles.Count <= 1) return;
+
+        var toDelete = _activeProfile;
+        var nextProfile = Profiles.First(p => p != toDelete);
+
+        ActiveProfile = nextProfile;
+        Profiles.Remove(toDelete);
+        SaveSettings();
+        DeleteProfileCommand.RaiseCanExecuteChanged();
+        StatusMessage = $"Profile '{toDelete.Name}' deleted.";
+    }
 
     private void BrowseSource()
     {
@@ -185,7 +290,6 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        // Scan the target folder for files that match the patterns
         var filesToRestore = _fileScanner.Scan(TargetFolder, patterns);
         if (filesToRestore.Count == 0)
         {
@@ -237,11 +341,19 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void SaveSettings()
     {
+        if (_loadingProfile) return;
+
+        if (_activeProfile != null)
+        {
+            _activeProfile.SourceFolder = SourceFolder;
+            _activeProfile.TargetFolder = TargetFolder;
+            _activeProfile.FilterPatterns = ParsePatterns();
+        }
+
         _settingsService.Save(new AppSettings
         {
-            SourceFolder = SourceFolder,
-            TargetFolder = TargetFolder,
-            FilterPatterns = ParsePatterns()
+            Profiles = Profiles.ToList(),
+            ActiveProfileName = _activeProfile?.Name ?? string.Empty
         });
     }
 

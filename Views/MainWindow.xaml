@@ -48,6 +48,33 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
 
+                <!-- Profile selector -->
+                <GroupBox Header="Profile">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding Profiles}"
+                                  SelectedItem="{Binding ActiveProfile}"
+                                  DisplayMemberPath="Name"
+                                  VerticalContentAlignment="Center"
+                                  Margin="0,0,8,0"/>
+                        <Button Grid.Column="1" Content="New"
+                                Command="{Binding NewProfileCommand}"
+                                Margin="0,0,4,0" MinWidth="60"/>
+                        <Button Grid.Column="2" Content="Rename"
+                                Command="{Binding RenameProfileCommand}"
+                                Margin="0,0,4,0" MinWidth="70"/>
+                        <Button Grid.Column="3" Content="Delete"
+                                Command="{Binding DeleteProfileCommand}"
+                                MinWidth="60"/>
+                    </Grid>
+                </GroupBox>
+
                 <!-- Source folder -->
                 <GroupBox Header="Source Folder  (your .NET solution root)">
                     <Grid>
