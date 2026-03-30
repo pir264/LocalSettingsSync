@@ -16,7 +16,9 @@ public class FileScanner : IFileScanner
         if (!Directory.Exists(sourceFolder))
             return Array.Empty<FileMatch>();
 
-        var compiledPatterns = CompilePatterns(patterns).ToList();
+        var patternList = patterns.ToList();
+        var excludedDirs = CompileExcludePatterns(patternList).ToList();
+        var compiledPatterns = CompilePatterns(patternList).ToList();
         if (compiledPatterns.Count == 0)
             return Array.Empty<FileMatch>();
 
@@ -24,10 +26,19 @@ public class FileScanner : IFileScanner
 
         foreach (var absolutePath in Directory.EnumerateFiles(sourceFolder, "*", SearchOption.AllDirectories))
         {
+            var relativePath = Path.GetRelativePath(sourceFolder, absolutePath);
+
+            if (excludedDirs.Count > 0)
+            {
+                var segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var dirSegments = segments.Take(segments.Length - 1);
+                if (dirSegments.Any(seg => excludedDirs.Any(rx => rx.IsMatch(seg))))
+                    continue;
+            }
+
             var fileName = Path.GetFileName(absolutePath);
             if (compiledPatterns.Any(rx => rx.IsMatch(fileName)))
             {
-                var relativePath = Path.GetRelativePath(sourceFolder, absolutePath);
                 results.Add(new FileMatch
                 {
                     AbsolutePath = absolutePath,
@@ -41,12 +52,34 @@ public class FileScanner : IFileScanner
         return results;
     }
 
+    private static IEnumerable<Regex> CompileExcludePatterns(IEnumerable<string> patterns)
+    {
+        foreach (var raw in patterns)
+        {
+            var trimmed = raw.Trim();
+            if (!trimmed.StartsWith('!')) continue;
+            var dir = trimmed[1..].Trim();
+            if (string.IsNullOrEmpty(dir)) continue;
+
+            Regex compiled;
+            try
+            {
+                compiled = new Regex(dir, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            }
+            catch (ArgumentException)
+            {
+                compiled = new Regex("^" + Regex.Escape(dir) + "$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            }
+            yield return compiled;
+        }
+    }
+
     private static IEnumerable<Regex> CompilePatterns(IEnumerable<string> patterns)
     {
         foreach (var raw in patterns)
         {
             var trimmed = raw.Trim();
-            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
+            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#') || trimmed.StartsWith('!'))
                 continue;
 
             Regex? compiled = null;

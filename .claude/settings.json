@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(git -C \"c:/Repos/LocalSettingsSync\" add Models/Profile.cs Models/AppSettings.cs Services/FileCopier.cs Services/SettingsService.cs ViewModels/MainViewModel.cs Views/MainWindow.xaml Views/OverwritePromptDialog.xaml Views/OverwritePromptDialog.xaml.cs Views/ProfileNameDialog.xaml Views/ProfileNameDialog.xaml.cs CLAUDE.md README.md)",
+      "Bash(git -C \"c:/Repos/LocalSettingsSync\" status)"
     ]
   }
 }

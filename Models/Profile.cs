@@ -20,7 +20,7 @@ public class Profile : INotifyPropertyChanged
 
     public string SourceFolder { get; set; } = string.Empty;
     public string TargetFolder { get; set; } = string.Empty;
-    public List<string> FilterPatterns { get; set; } = new();
+    public List<string> FilterPatterns { get; set; } = ["!bin"];
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)
